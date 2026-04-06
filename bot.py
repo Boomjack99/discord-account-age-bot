@@ -6,7 +6,6 @@ intents.members = True
 client = discord.Client(intents=intents)
 ACCOUNT_AGE_DAYS = 30
 LOG_CHANNEL_ID = int(os.environ.get("LOG_CHANNEL_ID", 0))
-WHITELISTED_BOTS = os.environ.get("WHITELISTED_BOTS", "").split(",")
 
 @client.event
 async def on_ready():
@@ -14,8 +13,8 @@ async def on_ready():
 
 @client.event
 async def on_member_join(member):
-    # Never ban whitelisted bots
-    if member.bot and str(member.id) in WHITELISTED_BOTS:
+    # Never ban bots - they are added by admins
+    if member.bot:
         return
 
     account_age = datetime.now(timezone.utc) - member.created_at
@@ -23,7 +22,6 @@ async def on_member_join(member):
     if account_age < timedelta(days=ACCOUNT_AGE_DAYS):
         days_old = account_age.days
         
-        # Try to DM the user before banning
         try:
             await member.send(
                 f"Your Discord account is only {days_old} days old. "
@@ -31,12 +29,10 @@ async def on_member_join(member):
                 f"Please try again later."
             )
         except:
-            pass  # DMs might be disabled
+            pass
         
-        # Ban the user
         await member.ban(reason=f"Account too new: {days_old} days old (minimum: {ACCOUNT_AGE_DAYS})")
         
-        # Log to channel
         if LOG_CHANNEL_ID:
             channel = client.get_channel(LOG_CHANNEL_ID)
             if channel:
