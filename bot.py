@@ -1,14 +1,12 @@
 import discord
 import os
 from datetime import datetime, timezone, timedelta
-
 intents = discord.Intents.default()
 intents.members = True
-
 client = discord.Client(intents=intents)
-
 ACCOUNT_AGE_DAYS = 30
 LOG_CHANNEL_ID = int(os.environ.get("LOG_CHANNEL_ID", 0))
+WHITELISTED_BOTS = os.environ.get("WHITELISTED_BOTS", "").split(",")
 
 @client.event
 async def on_ready():
@@ -16,6 +14,10 @@ async def on_ready():
 
 @client.event
 async def on_member_join(member):
+    # Never ban whitelisted bots
+    if member.bot and str(member.id) in WHITELISTED_BOTS:
+        return
+
     account_age = datetime.now(timezone.utc) - member.created_at
     
     if account_age < timedelta(days=ACCOUNT_AGE_DAYS):
@@ -43,5 +45,4 @@ async def on_member_join(member):
                     f"**Reason:** Account age {days_old} days (minimum: {ACCOUNT_AGE_DAYS})\n"
                     f"**Created:** {member.created_at.strftime('%Y-%m-%d %H:%M UTC')}"
                 )
-
 client.run(os.environ["DISCORD_TOKEN"])
