@@ -1,5 +1,6 @@
 import discord
 import os
+import re
 from datetime import datetime, timezone, timedelta
 intents = discord.Intents.default()
 intents.members = True
@@ -7,10 +8,12 @@ client = discord.Client(intents=intents)
 ACCOUNT_AGE_DAYS = 30
 LOG_CHANNEL_ID = int(os.environ.get("LOG_CHANNEL_ID", 0))
 
-# Comma-separated Discord user IDs to skip account age check
-# Add in Railway Variables tab, e.g. "123456789,987654321"
+# Comma-separated Discord user IDs to skip all checks
 WHITELIST_IDS = os.environ.get("WHITELIST_IDS", "")
 WHITELIST = set(int(uid.strip()) for uid in WHITELIST_IDS.split(",") if uid.strip())
+
+# Pattern: username ending in exactly 4 digits
+SPAM_NAME_PATTERN = re.compile(r".*\d{4}$")
 
 @client.event
 async def on_ready():
@@ -24,38 +27,47 @@ async def on_member_join(member):
     if member.bot:
         return
 
-    # Skip account age check for whitelisted users
+    # Skip all checks for whitelisted users
     if member.id in WHITELIST:
         if LOG_CHANNEL_ID:
             channel = client.get_channel(LOG_CHANNEL_ID)
             if channel:
                 await channel.send(
-                    f"✅ **Whitelisted:** {member.name} ({member.id}) - skipped account age check"
+                    f"✅ **Whitelisted:** {member.name} ({member.id}) - skipped all checks"
                 )
         return
 
     account_age = datetime.now(timezone.utc) - member.created_at
-    
-    if account_age < timedelta(days=ACCOUNT_AGE_DAYS):
-        days_old = account_age.days
-        
+    is_new_account = account_age < timedelta(days=ACCOUNT_AGE_DAYS)
+    has_spam_name = bool(SPAM_NAME_PATTERN.match(member.name))
+    days_old = account_age.days
+
+    # Ban if account is too new OR has spam name pattern
+    if is_new_account or has_spam_name:
+        if is_new_account and has_spam_name:
+            reason = f"Account too new ({days_old} days) + spam name pattern"
+        elif has_spam_name:
+            reason = f"Spam name pattern detected (account {days_old} days old)"
+        else:
+            reason = f"Account too new: {days_old} days old (minimum: {ACCOUNT_AGE_DAYS})"
+
         try:
             await member.send(
-                f"Your Discord account is only {days_old} days old. "
-                f"This server requires accounts to be at least {ACCOUNT_AGE_DAYS} days old. "
-                f"Please try again later."
+                f"Your account has been flagged by our anti-spam system. "
+                f"If you believe this is an error, please contact a server admin."
             )
         except:
             pass
-        
-        await member.ban(reason=f"Account too new: {days_old} days old (minimum: {ACCOUNT_AGE_DAYS})")
-        
+
+        await member.ban(reason=reason)
+
         if LOG_CHANNEL_ID:
             channel = client.get_channel(LOG_CHANNEL_ID)
             if channel:
                 await channel.send(
                     f"🚫 **Banned:** {member.name} ({member.id})\n"
-                    f"**Reason:** Account age {days_old} days (minimum: {ACCOUNT_AGE_DAYS})\n"
+                    f"**Reason:** {reason}\n"
                     f"**Created:** {member.created_at.strftime('%Y-%m-%d %H:%M UTC')}"
                 )
+
 client.run(os.environ["DISCORD_TOKEN"])
