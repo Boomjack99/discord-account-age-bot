@@ -7,14 +7,31 @@ client = discord.Client(intents=intents)
 ACCOUNT_AGE_DAYS = 30
 LOG_CHANNEL_ID = int(os.environ.get("LOG_CHANNEL_ID", 0))
 
+# Comma-separated Discord user IDs to skip account age check
+# Add in Railway Variables tab, e.g. "123456789,987654321"
+WHITELIST_IDS = os.environ.get("WHITELIST_IDS", "")
+WHITELIST = set(int(uid.strip()) for uid in WHITELIST_IDS.split(",") if uid.strip())
+
 @client.event
 async def on_ready():
     print(f"Bot is online as {client.user}")
+    if WHITELIST:
+        print(f"Whitelist loaded: {len(WHITELIST)} user(s)")
 
 @client.event
 async def on_member_join(member):
     # Never ban bots - they are added by admins
     if member.bot:
+        return
+
+    # Skip account age check for whitelisted users
+    if member.id in WHITELIST:
+        if LOG_CHANNEL_ID:
+            channel = client.get_channel(LOG_CHANNEL_ID)
+            if channel:
+                await channel.send(
+                    f"✅ **Whitelisted:** {member.name} ({member.id}) - skipped account age check"
+                )
         return
 
     account_age = datetime.now(timezone.utc) - member.created_at
