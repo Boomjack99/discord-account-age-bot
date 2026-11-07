@@ -6,7 +6,7 @@ intents = discord.Intents.default()
 intents.members = True
 client = discord.Client(intents=intents)
 
-ACCOUNT_AGE_DAYS = 180
+ACCOUNT_AGE_DAYS = 30
 LOG_CHANNEL_ID = int(os.environ.get("LOG_CHANNEL_ID", 0))
 
 # Comma-separated Discord user IDs to skip account age check
